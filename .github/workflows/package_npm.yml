@@ -1,0 +1,192 @@
+name: 🧪 Test, Analyze & Package
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test-and-publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: 📦 Setup Node.js for GitHub Packages
+      uses: actions/setup-node@v4
+      with:
+        node-version: '21'
+        registry-url: 'https://npm.pkg.github.com'
+        scope: '@marant7'
+        
+    - name: 🏧 Test ATM App
+      run: |
+        cd atm
+        npm ci
+        npm run test:cov
+        npm run build
+        
+    - name: 💳 Test Payment App
+      run: |
+        cd payment
+        npm ci
+        npm run test:cov
+        npm run build
+        
+    - name: 📊 SonarCloud Scan - ATM Project
+      run: |
+        cd atm
+        npm install -g @sonar/scan
+        sonar \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.token=${{ secrets.ATM_SONAR_TOKEN }} \
+          -Dsonar.projectKey=apistestlabs_atm \
+          -Dsonar.organization=apistestlabs \
+          -Dsonar.sources=libs/domain/src \
+          -Dsonar.tests=libs/domain/src \
+          -Dsonar.test.inclusions=**/*.spec.ts \
+          -Dsonar.exclusions=**/*.spec.ts \
+          -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info \
+          -Dsonar.coverage.exclusions=**/*.spec.ts,**/*.module.ts
+          
+    - name: 📊 SonarCloud Scan - Payment Project
+      run: |
+        cd payment
+        npm install -g @sonar/scan
+        sonar \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.token=${{ secrets.PAYMENT_SONAR_TOKEN }} \
+          -Dsonar.projectKey=apistestlabs_payment \
+          -Dsonar.organization=apistestlabs \
+          -Dsonar.sources=libs/domain/src \
+          -Dsonar.tests=libs/domain/src \
+          -Dsonar.test.inclusions=**/*.spec.ts \
+          -Dsonar.exclusions=**/*.spec.ts \
+          -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info \
+          -Dsonar.coverage.exclusions=**/*.spec.ts,**/*.module.ts
+        
+    - name: 🏧 Publish ATM to GitHub Packages
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        cd atm
+        
+        # Configurar .npmrc para GitHub Packages
+        echo "@marant7:registry=https://npm.pkg.github.com" > .npmrc
+        echo "//npm.pkg.github.com/:_authToken=${{ secrets.TOKEN_PACKAGE }}" >> .npmrc
+        
+        # Generar versión única basada en timestamp
+        TIMESTAMP=$(date +%Y%m%d%H%M%S)
+        NEW_VERSION="1.0.${TIMESTAMP}"
+        
+        # Configurar package.json con versión única
+        node -e "
+          const pkg = require('./package.json');
+          pkg.name = '@marant7/atm_marant';
+          pkg.version = '$NEW_VERSION';
+          delete pkg.private;
+          pkg.publishConfig = {
+            registry: 'https://npm.pkg.github.com',
+            access: 'public'
+          };
+          pkg.repository = {
+            type: 'git',
+            url: 'git+https://github.com/${{ github.repository }}.git'
+          };
+          pkg.author = 'Mario Antonio Flores Ramos';
+          pkg.description = 'ATM System implementing Command Design Pattern - Lab 03';
+          pkg.keywords = ['command', 'design-pattern', 'atm', 'banking', 'nestjs', 'typescript'];
+          require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+        "
+        
+        # Mostrar configuración para debug
+        echo "=== Nueva versión ATM: $NEW_VERSION ==="
+        echo '=== .npmrc content ==='
+        cat .npmrc
+        echo '=== package.json name & version ==='
+        node -e "const pkg=require('./package.json'); console.log(pkg.name + '@' + pkg.version)"
+        
+        # Publicar
+        npm publish
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.TOKEN_PACKAGE }}
+        
+    - name: 💳 Publish Payment to GitHub Packages
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        cd payment
+        
+        # Configurar .npmrc para GitHub Packages
+        echo "@marant7:registry=https://npm.pkg.github.com" > .npmrc
+        echo "//npm.pkg.github.com/:_authToken=${{ secrets.TOKEN_PACKAGE }}" >> .npmrc
+        
+        # Generar versión única basada en timestamp
+        TIMESTAMP=$(date +%Y%m%d%H%M%S)
+        NEW_VERSION="1.0.${TIMESTAMP}"
+        
+        # Configurar package.json con versión única
+        node -e "
+          const pkg = require('./package.json');
+          pkg.name = '@marant7/payment_marant';
+          pkg.version = '$NEW_VERSION';
+          delete pkg.private;
+          pkg.publishConfig = {
+            registry: 'https://npm.pkg.github.com',
+            access: 'public'
+          };
+          pkg.repository = {
+            type: 'git',
+            url: 'git+https://github.com/${{ github.repository }}.git'
+          };
+          pkg.author = 'Mario Antonio Flores Ramos';
+          pkg.description = 'Payment System implementing Strategy Design Pattern - Lab 03';
+          pkg.keywords = ['strategy', 'design-pattern', 'payment', 'credit-card', 'nestjs', 'typescript'];
+          require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+        "
+        
+        # Mostrar configuración para debug
+        echo "=== Nueva versión Payment: $NEW_VERSION ==="
+        echo '=== .npmrc content ==='
+        cat .npmrc
+        echo '=== package.json name & version ==='
+        node -e "const pkg=require('./package.json'); console.log(pkg.name + '@' + pkg.version)"
+        
+        # Publicar
+        npm publish
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.TOKEN_PACKAGE }}
+        
+    - name: 📋 Display Package URLs
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        # Obtener timestamp para mostrar en el resumen
+        TIMESTAMP=$(date +%Y%m%d%H%M%S)
+        VERSION="1.0.${TIMESTAMP}"
+        
+        echo "## 📦 Paquetes Publicados en GitHub Packages" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **@marant7/atm_marant@$VERSION** - Patrón Command" >> $GITHUB_STEP_SUMMARY
+        echo "🔗 https://github.com/Marant7?tab=packages" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **@marant7/payment_marant@$VERSION** - Patrón Strategy" >> $GITHUB_STEP_SUMMARY
+        echo "🔗 https://github.com/Marant7?tab=packages" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "🔍 **SonarCloud Analysis:**" >> $GITHUB_STEP_SUMMARY
+        echo "- 🏧 [ATM Project](https://sonarcloud.io/project/overview?id=apistestlabs_atm)" >> $GITHUB_STEP_SUMMARY
+        echo "- 💳 [Payment Project](https://sonarcloud.io/project/overview?id=apistestlabs_payment)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "🛠️ **Instalación:**" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+        echo "npm install @marant7/atm_marant@$VERSION" >> $GITHUB_STEP_SUMMARY
+        echo "npm install @marant7/payment_marant@$VERSION" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "🆔 **Build ID:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+        echo "📅 **Timestamp:** $TIMESTAMP" >> $GITHUB_STEP_SUMMARY

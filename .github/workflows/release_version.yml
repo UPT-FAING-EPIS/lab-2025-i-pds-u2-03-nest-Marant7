@@ -1,0 +1,220 @@
+name: 🚀 Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v4
+      
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '21'
+        registry-url: 'https://npm.pkg.github.com'
+        scope: '@marant7'
+        
+    - name: 🧪 Test ATM App
+      working-directory: atm
+      run: |
+        npm ci
+        npm run test:cov
+        npm run build
+        
+    - name: 🧪 Test Payment App
+      working-directory: payment
+      run: |
+        npm ci
+        npm run test:cov
+        npm run build
+        
+    - name: 🏷️ Get Version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION="${{ github.ref_name }}"
+        fi
+        # Remove 'v' prefix if present
+        VERSION=$(echo $VERSION | sed 's/^v//')
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Selected version: $VERSION"
+        
+    - name: 📦 Create ATM Package
+      working-directory: atm
+      run: |
+        # Set version in package.json
+        npm version ${{ steps.get_version.outputs.VERSION }} --no-git-tag-version
+        
+        # Configure package for GitHub
+        node -e "
+          const pkg = require('./package.json');
+          pkg.name = '@marant7/atm_marant';
+          delete pkg.private;
+          pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
+          pkg.repository = {
+            type: 'git',
+            url: 'git+https://github.com/${{ github.repository }}.git'
+          };
+          pkg.author = 'Mario Antonio Flores Ramos';
+          pkg.description = 'ATM System implementing Command Design Pattern - Lab 03';
+          pkg.keywords = ['command', 'design-pattern', 'atm', 'banking', 'nestjs', 'typescript'];
+          require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+        "
+        
+        # Create package
+        npm pack
+        
+        # Find the exact filename and store it
+        PACKAGE_FILE=$(ls *.tgz | head -1)
+        echo "ATM_PACKAGE_FILE=$PACKAGE_FILE" >> $GITHUB_ENV
+        echo "ATM package file: $PACKAGE_FILE"
+        
+    - name: 📦 Create Payment Package
+      working-directory: payment
+      run: |
+        # Set version in package.json
+        npm version ${{ steps.get_version.outputs.VERSION }} --no-git-tag-version
+        
+        # Configure package for GitHub
+        node -e "
+          const pkg = require('./package.json');
+          pkg.name = '@marant7/payment_marant';
+          delete pkg.private;
+          pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
+          pkg.repository = {
+            type: 'git',
+            url: 'git+https://github.com/${{ github.repository }}.git'
+          };
+          pkg.author = 'Mario Antonio Flores Ramos';
+          pkg.description = 'Payment System implementing Strategy Design Pattern - Lab 03';
+          pkg.keywords = ['strategy', 'design-pattern', 'payment', 'credit-card', 'nestjs', 'typescript'];
+          require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+        "
+        
+        # Create package
+        npm pack
+        
+        # Find the exact filename and store it
+        PACKAGE_FILE=$(ls *.tgz | head -1)
+        echo "PAYMENT_PACKAGE_FILE=$PACKAGE_FILE" >> $GITHUB_ENV
+        echo "Payment package file: $PACKAGE_FILE"
+        
+    - name: 📋 Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.TOKEN_PACKAGE }}
+      with:
+        tag_name: v${{ steps.get_version.outputs.VERSION }}
+        release_name: 🎉 Release v${{ steps.get_version.outputs.VERSION }} - Patrones de Comportamiento
+        body: |
+          ## 🎯 Patrones de Diseño de Comportamiento - Lab 03
+          
+          **Autor:** Mario Antonio Flores Ramos
+          **Versión:** ${{ steps.get_version.outputs.VERSION }}
+          **Fecha:** $(date '+%d/%m/%Y')
+          
+          ### 📦 Paquetes Incluidos
+          - `@marant7/atm_marant@${{ steps.get_version.outputs.VERSION }}`: Sistema ATM con patrón Command
+          - `@marant7/payment_marant@${{ steps.get_version.outputs.VERSION }}`: Sistema de Pagos con patrón Strategy
+          
+          ### 🏗️ Patrones Implementados
+          
+          #### 🏧 Patrón Command (ATM System)
+          - **Propósito**: Encapsula operaciones bancarias como objetos ejecutables
+          - **Componentes**: Command, ConcreteCommand, Invoker, Receiver
+          - **Operaciones**: Depósitos y retiros bancarios
+          - **Beneficios**: Desacoplamiento, extensibilidad, posible implementación de undo/redo
+          
+          #### 💳 Patrón Strategy (Payment System)  
+          - **Propósito**: Permite intercambiar algoritmos de pago dinámicamente
+          - **Componentes**: Strategy, ConcreteStrategy, Context
+          - **Métodos**: Efectivo, Tarjeta de Crédito, Tarjeta de Débito
+          - **Beneficios**: Flexibilidad, extensibilidad, principio abierto/cerrado
+          
+          ### 🛠️ Instalación desde GitHub Packages
+          ```bash
+          # Configurar registry para @marant7 scope
+          echo "@marant7:registry=https://npm.pkg.github.com" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN" >> .npmrc
+          
+          # Instalar paquetes
+          npm install @marant7/atm_marant@${{ steps.get_version.outputs.VERSION }}
+          npm install @marant7/payment_marant@${{ steps.get_version.outputs.VERSION }}
+          ```
+          
+          ### 📥 Instalación desde archivos .tgz
+          También puedes descargar los archivos .tgz de esta release e instalar localmente:
+          ```bash
+          npm install ./atm_marant-v${{ steps.get_version.outputs.VERSION }}.tgz
+          npm install ./payment_marant-v${{ steps.get_version.outputs.VERSION }}.tgz
+          ```
+          
+          ### 🧪 Cobertura de Pruebas
+          - ✅ Tests unitarios con Jest
+          - 📊 Análisis de código con SonarCloud
+          - 📚 Documentación generada con Compodoc
+          - 🚀 CI/CD automático con GitHub Actions
+          
+          ### 🔗 Enlaces Útiles
+          - 📚 [Documentación](https://marant7.github.io/lab-2025-i-pds-u2-03-nest-Marant7/)
+          - 📊 [Análisis ATM](https://sonarcloud.io/project/overview?id=apistestlabs_atm)
+          - 📊 [Análisis Payment](https://sonarcloud.io/project/overview?id=apistestlabs_payment)
+          - 📦 [GitHub Packages](https://github.com/Marant7?tab=packages)
+        draft: false
+        prerelease: false
+        
+    - name: 📤 Upload ATM Package
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.TOKEN_PACKAGE }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./atm/${{ env.ATM_PACKAGE_FILE }}
+        asset_name: atm_marant-v${{ steps.get_version.outputs.VERSION }}.tgz
+        asset_content_type: application/gzip
+        
+    - name: 📤 Upload Payment Package
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.TOKEN_PACKAGE }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./payment/${{ env.PAYMENT_PACKAGE_FILE }}
+        asset_name: payment_marant-v${{ steps.get_version.outputs.VERSION }}.tgz
+        asset_content_type: application/gzip
+        
+    - name: 🎉 Release Summary
+      run: |
+        echo "## 🎉 Release v${{ steps.get_version.outputs.VERSION }} Creado" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 Paquetes publicados:" >> $GITHUB_STEP_SUMMARY
+        echo "- 🏧 **@marant7/atm_marant@${{ steps.get_version.outputs.VERSION }}** (Command Pattern)" >> $GITHUB_STEP_SUMMARY
+        echo "- 💳 **@marant7/payment_marant@${{ steps.get_version.outputs.VERSION }}** (Strategy Pattern)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 Enlaces:" >> $GITHUB_STEP_SUMMARY
+        echo "- 📋 [Ver Release](https://github.com/${{ github.repository }}/releases/tag/v${{ steps.get_version.outputs.VERSION }})" >> $GITHUB_STEP_SUMMARY
+        echo "- 📦 [Ver Packages](https://github.com/Marant7?tab=packages)" >> $GITHUB_STEP_SUMMARY
+        echo "- 📚 [Documentación](https://marant7.github.io/lab-2025-i-pds-u2-03-nest-Marant7/)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📁 Archivos generados:" >> $GITHUB_STEP_SUMMARY
+        echo "- \`${{ env.ATM_PACKAGE_FILE }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- \`${{ env.PAYMENT_PACKAGE_FILE }}\`" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,246 @@
+name: 📚 Publish Documentation
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-docs:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v4
+      
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '21'
+        
+    - name: 🏧 Generate ATM Documentation
+      run: |
+        cd atm
+        npm ci
+        npx @compodoc/compodoc -p tsconfig.json -d ../docs/atm --theme material --name "ATM System - Command Pattern" --hideGenerator --disablePrivate --disableProtected --disableInternal
+        
+    - name: 💳 Generate Payment Documentation
+      run: |
+        cd payment
+        npm ci
+        npx @compodoc/compodoc -p tsconfig.json -d ../docs/payment --theme material --name "Payment System - Strategy Pattern" --hideGenerator --disablePrivate --disableProtected --disableInternal
+        
+    - name: 🏠 Create Documentation Index
+      run: |
+        mkdir -p docs
+        cat > docs/index.html << 'EOF'
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Documentación - Patrones de Diseño de Comportamiento</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    line-height: 1.6; 
+                    color: #333; 
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                }
+                .container { 
+                    max-width: 1200px; 
+                    margin: 0 auto; 
+                    padding: 40px 20px; 
+                }
+                .header {
+                    text-align: center;
+                    color: white;
+                    margin-bottom: 50px;
+                }
+                .header h1 {
+                    font-size: 3rem;
+                    margin-bottom: 10px;
+                    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                }
+                .header p {
+                    font-size: 1.2rem;
+                    opacity: 0.9;
+                }
+                .projects {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+                    gap: 30px;
+                    margin-top: 40px;
+                }
+                .project { 
+                    background: white; 
+                    padding: 30px; 
+                    border-radius: 15px; 
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    transition: transform 0.3s ease, box-shadow 0.3s ease;
+                }
+                .project:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+                }
+                .project-icon {
+                    font-size: 3rem;
+                    margin-bottom: 20px;
+                }
+                .project h2 { 
+                    color: #333; 
+                    margin-bottom: 15px;
+                    font-size: 1.5rem;
+                }
+                .project p {
+                    color: #666;
+                    margin-bottom: 20px;
+                    line-height: 1.6;
+                }
+                .project a { 
+                    display: inline-block;
+                    background: linear-gradient(45deg, #667eea, #764ba2);
+                    color: white; 
+                    text-decoration: none; 
+                    padding: 12px 25px;
+                    border-radius: 25px;
+                    transition: all 0.3s ease;
+                    font-weight: 500;
+                    margin-right: 10px;
+                    margin-bottom: 10px;
+                }
+                .project a:hover { 
+                    transform: scale(1.05);
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                }
+                .badges {
+                    margin-top: 15px;
+                }
+                .badge {
+                    display: inline-block;
+                    padding: 5px 12px;
+                    background: #f0f0f0;
+                    border-radius: 15px;
+                    font-size: 0.8rem;
+                    margin-right: 8px;
+                    margin-bottom: 5px;
+                    color: #666;
+                }
+                .pattern-info {
+                    background: #e8f4fd;
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin: 15px 0;
+                    border-left: 4px solid #0366d6;
+                }
+                .pattern-info h3 {
+                    color: #0366d6;
+                    font-size: 1rem;
+                    margin-bottom: 8px;
+                }
+                .footer {
+                    text-align: center;
+                    margin-top: 50px;
+                    color: white;
+                    opacity: 0.8;
+                }
+                .links {
+                    display: flex;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🎯 Patrones de Diseño de Comportamiento</h1>
+                    <p>Laboratorio 03 - Sesión de Laboratorio N° 03</p>
+                    <p>Mario Antonio Flores Ramos • Universidad • 2025-I</p>
+                </div>
+                
+                <div class="projects">
+                    <div class="project">
+                        <div class="project-icon">🏧</div>
+                        <h2>Sistema ATM - Patrón Command</h2>
+                        <p>Implementación del patrón Command para encapsular operaciones bancarias como objetos ejecutables. Permite realizar depósitos y retiros de manera desacoplada.</p>
+                        
+                        <div class="pattern-info">
+                            <h3>Patrón Command</h3>
+                            <p>Encapsula una solicitud como un objeto, permitiendo parametrizar clientes con diferentes solicitudes y operaciones de cola, registro y deshacer.</p>
+                        </div>
+                        
+                        <div class="links">
+                            <a href="./atm/index.html">📖 Ver Documentación</a>
+                            <a href="https://sonarcloud.io/project/overview?id=apistestlabs_atm" target="_blank">📊 SonarCloud</a>
+                        </div>
+                        
+                        <div class="badges">
+                            <span class="badge">Command Pattern</span>
+                            <span class="badge">Banking</span>
+                            <span class="badge">TypeScript</span>
+                            <span class="badge">NestJS</span>
+                            <span class="badge">Jest</span>
+                        </div>
+                    </div>
+                    
+                    <div class="project">
+                        <div class="project-icon">💳</div>
+                        <h2>Sistema de Pagos - Patrón Strategy</h2>
+                        <p>Implementación del patrón Strategy para manejar diferentes métodos de pago. Permite intercambiar algoritmos de pago (efectivo, tarjeta de crédito, débito) dinámicamente.</p>
+                        
+                        <div class="pattern-info">
+                            <h3>Patrón Strategy</h3>
+                            <p>Define una familia de algoritmos, los encapsula y los hace intercambiables. Strategy permite que el algoritmo varíe independientemente de los clientes que lo usan.</p>
+                        </div>
+                        
+                        <div class="links">
+                            <a href="./payment/index.html">📖 Ver Documentación</a>
+                            <a href="https://sonarcloud.io/project/overview?id=apistestlabs_payment" target="_blank">📊 SonarCloud</a>
+                        </div>
+                        
+                        <div class="badges">
+                            <span class="badge">Strategy Pattern</span>
+                            <span class="badge">Payments</span>
+                            <span class="badge">TypeScript</span>
+                            <span class="badge">NestJS</span>
+                            <span class="badge">Jest</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p>📚 Documentación generada automáticamente con Compodoc</p>
+                    <p>🔍 Análisis de código con SonarCloud • 📦 Publicación en GitHub Packages</p>
+                    <p>🚀 CI/CD con GitHub Actions • 📖 Desplegado en GitHub Pages</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        EOF
+        
+    - name: 🔧 Setup Pages
+      uses: actions/configure-pages@v4
+      
+    - name: 📤 Upload Pages Artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: './docs'
+        
+    - name: 🚀 Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
